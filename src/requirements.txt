@@ -1,0 +1,7 @@
+dash
+numpy
+pandas
+gunicorn
+apscheduler
+Flask-APScheduler
+Pebble
