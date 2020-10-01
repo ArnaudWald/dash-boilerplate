@@ -1,42 +1,84 @@
 # -*- coding: utf-8 -*-
-"""Basic dashboard."""
+"""Basic dashboard with placeholder graphs."""
 
 import dash_core_components as dcc
 from dash.dependencies import Input, Output
 import dash_html_components as html
-import plotly.express as px
 import pandas as pd
 
 from main_app import app
+from dashboards.graph_utils import make_empty_graphs, DEFAULT_COLORS as colors
+
+LAYOUT_COLUMNS = ['Subset 1', 'Subset 2', 'Subset 3', 'Subset 4']
+LAYOUT_ROWS = ['Row 1', 'Row 2', 'Row 3']
 
 
-df = pd.read_csv('data/gapminderDataFiveYear.csv')
+layout = html.Div(
+    style={'backgroundColor': colors['background']},
+    children=[
+        html.Div(id='dashboard-3-main-page'),
+        dcc.Interval(id='dashboard-3-interval',
+                     interval=5*60*1000,  # 5 minutes (in milliseconds)
+                     # interval=1*1000,  # in milliseconds
+                     n_intervals=0)
+    ]
+)
 
 
-layout = html.Div([
-    dcc.Graph(id='graph-with-slider-dashboard3'),
-    dcc.Slider(
-        id='year-slider-dashboard3',
-        min=df['year'].min(),
-        max=df['year'].max(),
-        value=df['year'].min(),
-        marks={str(year): str(year) for year in df['year'].unique()},
-        step=None
+def load_data_make_graphs():
+    """Load the CSV dataframes for plotting."""
+    figures = {}
+    for col_name in LAYOUT_COLUMNS:
+        figures[col_name] = {}
+
+        for row_name in LAYOUT_ROWS:
+            try:
+                df = pd.read_csv(f"data/{col_name}/{row_name}.csv", index_col=0)
+                # figures[col_name][row_name] = make_default_graph(df, title=title)
+            except FileNotFoundError:
+                # print("Error loading CSV data for the %s %s data. Returning empty graph..." % (col_name, row_name))
+                figures[col_name][row_name] = make_empty_graphs(n=1, height_pixels=300)
+
+    return figures
+
+
+def make_sub_plot(figures, col_name):
+    """Avoid copy-pasting and errors."""
+    id_name = col_name.lower().replace(' ', '-')
+
+    div_contents = [html.H2(col_name)]
+
+    for row_name in LAYOUT_ROWS:
+        row_id = id_name + '-' + row_name.lower().replace(' ', '-')
+        div_contents.append(
+            dcc.Graph(id=row_id, figure=figures[col_name][row_name])
+        )
+
+    subset_layout = html.Div(
+        className="column",
+        id=id_name,
+        children=div_contents,
+        style={}
     )
-])
+
+    return subset_layout
 
 
-@app.callback(
-    Output('graph-with-slider-dashboard3', 'figure'),
-    [Input('year-slider-dashboard3', 'value')])
-def update_dashboard3_figure(selected_year):
-    """Update figure on callback trigger."""
-    filtered_df = df[df.year == selected_year]
+@app.callback(Output('dashboard-3-main-page', 'children'),
+              [Input('dashboard-3-interval', 'n_intervals')])
+def dashboard_3_update_graphs(n_intervals):
+    """Update all the graphs."""
+    figures = load_data_make_graphs()
 
-    fig = px.scatter(filtered_df, x="gdpPercap", y="lifeExp",
-                     size="pop", color="continent", hover_name="country",
-                     log_x=True, size_max=55)
+    main_page_layout = html.Div(children=[
+        html.Div(className='row', children=[
+            make_sub_plot(figures, LAYOUT_COLUMNS[0]),
+            make_sub_plot(figures, LAYOUT_COLUMNS[1]),
+        ]),
 
-    fig.update_layout(transition_duration=500)
-
-    return fig
+        html.Div(className='row', children=[
+            make_sub_plot(figures, LAYOUT_COLUMNS[2]),
+            make_sub_plot(figures, LAYOUT_COLUMNS[3]),
+        ]),
+    ])
+    return main_page_layout
